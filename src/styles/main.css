@@ -1,0 +1,59 @@
+@import 'tabulator-tables/dist/css/tabulator.min.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 244 245 247; --panel: 255 255 255; --raised: 236 239 244; --line: 211 217 226;
+  --fg: 28 32 40; --mute: 98 107 122; --accent: 22 105 210; --edit: 190 112 0; --bad: 200 40 40;
+}
+:root.dark {
+  --bg: 14 16 20; --panel: 21 24 30; --raised: 30 34 42; --line: 45 51 62;
+  --fg: 214 219 228; --mute: 133 142 157; --accent: 96 165 250; --edit: 245 176 65; --bad: 244 105 105;
+}
+html, body, #app { height: 100%; }
+body { @apply bg-bg text-fg font-sans text-[13px] antialiased; margin: 0; }
+button { @apply cursor-pointer; }
+:focus-visible { outline: 2px solid rgb(var(--accent)); outline-offset: 1px; }
+
+.btn { @apply inline-flex items-center gap-1 h-7 px-2.5 rounded border border-line bg-raised text-fg text-[12px] whitespace-nowrap hover:border-mute disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-line; }
+.btn-primary { @apply border-accent bg-accent text-white font-medium hover:brightness-110; }
+.field { @apply h-7 rounded border border-line bg-bg px-2 text-[12px] text-fg placeholder:text-mute; }
+.panel-title { @apply text-[12px] font-semibold text-fg; }
+
+/* ---- CodeMirror ---- */
+.cm-editor { height: 100%; background: transparent !important; font-family: theme('fontFamily.mono'); font-size: 12.5px; }
+.cm-editor.cm-focused { outline: none; }
+.cm-scroller { font-family: inherit; }
+.cm-gutters { background: transparent !important; border-right: 1px solid rgb(var(--line)) !important; color: rgb(var(--mute)) !important; }
+.cm-activeLine, .cm-activeLineGutter { background: rgb(var(--raised) / .55) !important; }
+.cm-errorLine { background: rgb(var(--bad) / .18); box-shadow: inset 2px 0 rgb(var(--bad)); }
+
+/* ---- Tabulator theme (maps to the app palette) ---- */
+.tabulator { background: rgb(var(--panel)); border: 0; font-size: 12.5px; color: rgb(var(--fg)); }
+.tabulator .tabulator-header { background: rgb(var(--raised)); border-bottom: 1px solid rgb(var(--line)); color: rgb(var(--fg)); }
+.tabulator .tabulator-header .tabulator-col { background: rgb(var(--raised)); border-right: 1px solid rgb(var(--line)); }
+.tabulator .tabulator-header .tabulator-col .tabulator-col-content { padding: 4px 8px; }
+.tabulator .tabulator-header .tabulator-col .tabulator-col-title { font-family: theme('fontFamily.mono'); font-weight: 600; }
+.tabulator .tabulator-header .tabulator-header-filter input { background: rgb(var(--bg)); color: rgb(var(--fg)); border: 1px solid rgb(var(--line)); border-radius: 3px; padding: 1px 4px; }
+.tabulator-row { background: rgb(var(--panel)); min-height: 24px; border-bottom: 1px solid rgb(var(--line) / .6); }
+.tabulator-row.tabulator-row-even { background: rgb(var(--raised) / .35); }
+.tabulator-row:hover, .tabulator-row.tabulator-row-even:hover { background: rgb(var(--accent) / .09); }
+.tabulator-row .tabulator-cell { border-right: 1px solid rgb(var(--line) / .6); padding: 3px 8px; font-family: theme('fontFamily.mono'); }
+.tabulator-row .tabulator-cell.tabulator-row-header, .tabulator-row-header { background: rgb(var(--raised)) !important; color: rgb(var(--mute)); text-align: right; }
+.tabulator-row .tabulator-cell.tabulator-range-selected:not(.tabulator-range-only-cell-selected):not(.tabulator-range-row-header) { background: rgb(var(--accent) / .16); }
+.tabulator-row .tabulator-cell.tabulator-range-only-cell-selected { border: 1px solid rgb(var(--accent)); }
+.tabulator-row .tabulator-cell.tabulator-editing { border: 2px solid rgb(var(--accent)); padding: 0; background: rgb(var(--bg)); }
+.tabulator-row .tabulator-cell.tabulator-editing input { width: 100%; height: 100%; padding: 2px 6px; background: rgb(var(--bg)); color: rgb(var(--fg)); font: inherit; border: 0; outline: 0; }
+.tabulator-placeholder span { color: rgb(var(--mute)) !important; font-size: 13px !important; font-weight: 400 !important; }
+.tabulator-frozen-left { border-right: 1px solid rgb(var(--line)) !important; }
+
+/* SQL value rendering inside cells */
+.v-null { color: rgb(var(--mute)); font-style: italic; background: rgb(var(--mute) / .15); border-radius: 3px; padding: 0 4px; }
+.v-empty { color: rgb(var(--mute)); border: 1px dashed rgb(var(--mute) / .7); border-radius: 3px; padding: 0 4px; font-size: 11px; }
+.v-num { color: rgb(var(--accent)); display: block; text-align: right; }
+.v-expr { color: rgb(var(--edit)); }
+.v-bin { color: rgb(var(--accent)); opacity: .8; }
+.v-uni::before { content: 'N'; color: rgb(var(--mute)); margin-right: 3px; font-size: 10px; }
+.tabulator-cell.cell-mod { box-shadow: inset 0 0 0 100px rgb(var(--edit) / .10); }
+.tabulator-cell.cell-mod::after { content: ''; position: absolute; top: 0; right: 0; border-top: 7px solid rgb(var(--edit)); border-left: 7px solid transparent; }
