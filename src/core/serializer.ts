@@ -36,6 +36,11 @@ export function valuesEqual(a: SqlValue, b: SqlValue): boolean {
 export function serializeStatement(s: InsertStatement, opts: SerializeOptions = {}): string {
   const rows = opts.onlyRowIds ? s.rows.filter((r) => opts.onlyRowIds!.has(r.id)) : s.rows
   if (rows.length === 0) return ''
+  if (opts.style === 'ssms') {
+    // SSMS "Generate Scripts": one single-line INSERT per row, no INTO, no semicolon.
+    const head = `INSERT ${s.tableRaw}` + (s.columnsRaw ? ` (${s.columnsRaw.join(', ')})` : '') + ' VALUES '
+    return rows.map((r) => head + '(' + r.cells.map(serializeValue).join(', ') + ')' + (opts.goSeparator ? '\nGO' : '')).join('\n')
+  }
   const size = opts.rowsPerInsert && opts.rowsPerInsert > 0 ? opts.rowsPerInsert : rows.length
   const head = `INSERT INTO ${s.tableRaw}` + (s.columnsRaw ? `\n    (${s.columnsRaw.join(', ')})` : '') + '\nVALUES\n'
   const out: string[] = []
