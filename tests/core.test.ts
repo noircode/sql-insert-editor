@@ -188,3 +188,16 @@ describe('editor state (edit / undo / redo / reset)', () => {
     expect(st.generate()).toContain("'J0hn D0e'")
   })
 })
+
+import { parseTsv, toTsv } from '../src/core/tsv'
+describe('clipboard TSV', () => {
+  it('parses a block and ignores the trailing newline', () => {
+    expect(parseTsv('a\tb\nc\td\n')).toEqual([['a', 'b'], ['c', 'd']])
+    expect(parseTsv('x')).toEqual([['x']])
+    expect(parseTsv('a\t\tc')).toEqual([['a', '', 'c']])
+  })
+  it('round-trips tabs, newlines and quotes', () => {
+    const rows = [['he said "hi"', 'line1\nline2', 'a\tb'], ['', 'NULL', "it's"]]
+    expect(parseTsv(toTsv(rows))).toEqual(rows)
+  })
+})

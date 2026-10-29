@@ -57,3 +57,11 @@ button { @apply cursor-pointer; }
 .v-uni::before { content: 'N'; color: rgb(var(--mute)); margin-right: 3px; font-size: 10px; }
 .tabulator-cell.cell-mod { box-shadow: inset 0 0 0 100px rgb(var(--edit) / .10); }
 .tabulator-cell.cell-mod::after { content: ''; position: absolute; top: 0; right: 0; border-top: 7px solid rgb(var(--edit)); border-left: 7px solid transparent; }
+
+/* ---- spreadsheet selection ---- */
+.sheet { -webkit-user-select: none; user-select: none; }
+.sheet .tabulator-cell { cursor: cell; }
+.sheet .tabulator-cell.sel { background-color: rgb(var(--accent) / .18) !important; }
+.sheet .tabulator-cell.tabulator-row-header.sel { background-color: rgb(var(--accent) / .3) !important; color: rgb(var(--fg)); }
+.sheet .tabulator-cell.active { outline: 2px solid rgb(var(--accent)); outline-offset: -2px; z-index: 3; }
+.sheet .tabulator-cell.tabulator-editing input { user-select: text; -webkit-user-select: text; }
