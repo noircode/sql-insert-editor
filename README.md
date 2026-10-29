@@ -44,7 +44,7 @@ Everything runs in your browser. SQL is never executed, uploaded or sent to any 
 - SQL syntax highlighting, line numbers and monospaced fonts in both editors (CodeMirror 6)
 - Generated SQL updates automatically (debounced) and is read-only
 - Copy SQL, download `.sql`, import a `.sql` file, optional rows-per-INSERT chunking, optional "selected rows only"
-- Several INSERT statements open as separate tabs and are never merged
+- INSERTs for the same table and columns are grouped into one tab (SSMS writes one INSERT per row); different tables get their own tabs. Grouping can be switched off
 - Dark theme by default with a light theme toggle
 - Confirmation before clearing, re-parsing over edits or resetting, and a warning when leaving the page with unsaved edits
 
@@ -125,6 +125,15 @@ When you open a string cell for editing, quotes are shown automatically if the p
 (empty, `NULL`, or starting with `'`, `N'` or `=`), so what you see always parses back to the same value.
 Invalid input (unbalanced parentheses in an expression, an unterminated `'string`) is rejected with a message and the cell is left unchanged.
 The same rules apply to pasted text. Pasting never adds rows or columns: anything beyond the grid edge is ignored.
+
+## SSMS "Generate Scripts" format
+
+Scripts from SSMS (*Tasks → Generate Scripts → Types of data to script: Data*) look like this: one single-line INSERT per row, no `INTO`, no semicolons, dates and decimals as `CAST(...)`, optional `GO` lines.
+
+- They parse as they are. All INSERTs for the same table and columns land in **one tab**. Untick *Group same-table INSERTs* to keep them separate. If grouped INSERTs were not adjacent, the generated SQL lists each table together (rows keep their order) and a note tells you.
+- The **Format** dropdown in the output panel picks *SSMS Generate Scripts* (one row per INSERT, no semicolon, optional `GO` after each) or *Standard* (multi-row). It defaults to the style of what you pasted, and `GO` is on if your input had it.
+- `CAST(N'2025-12-31T00:00:00.000' AS DateTime)` and `CAST(1009640.00 AS Numeric(28, 2))` show and edit as the inner value (`2025-12-31T00:00:00.000`, `1009640.00`). The CAST wrapper is kept; the type shows in the cell tooltip. Type `=GETDATE()` to replace the whole thing.
+- Other SSMS script lines (`USE`, `SET IDENTITY_INSERT`, `SET ANSI_NULLS`, …) are not supported and are reported as errors. Remove them before pasting.
 
 ## Supported SQL
 
