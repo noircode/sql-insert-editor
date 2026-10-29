@@ -65,3 +65,4 @@ button { @apply cursor-pointer; }
 .sheet .tabulator-cell.tabulator-row-header.sel { background-color: rgb(var(--accent) / .3) !important; color: rgb(var(--fg)); }
 .sheet .tabulator-cell.active { outline: 2px solid rgb(var(--accent)); outline-offset: -2px; z-index: 3; }
 .sheet .tabulator-cell.tabulator-editing input { user-select: text; -webkit-user-select: text; }
+.v-cast { color: rgb(var(--fg)); }
