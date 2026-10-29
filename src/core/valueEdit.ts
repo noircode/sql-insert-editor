@@ -24,8 +24,29 @@ export type EditResult = { ok: true; value: SqlValue } | { ok: false; error: str
 
 export const NULL_VALUE: SqlValue = Object.freeze({ kind: 'null', value: 'NULL' })
 
+/**
+ * `CAST(N'2025-12-31T00:00:00.000' AS DateTime)` / `CAST(1009640.00 AS Numeric(28, 2))` – the shape SSMS
+ * "Generate Scripts" uses for dates and decimals. Shown and edited as the inner value; the CAST wrapper is kept.
+ */
+const CAST_RE = /^CAST\s*\(\s*(N?'(?:[^']|'')*'|[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)\s+AS\s+([A-Za-z_]\w*(?:\s*\([^()]*\))?)\s*\)$/is
+export interface CastParts { text: string; numeric: boolean; unicode: boolean; type: string }
+export function castParts(v: SqlValue): CastParts | null {
+  if (v.kind !== 'expression') return null
+  const m = CAST_RE.exec(v.value.trim())
+  if (!m) return null
+  const lit = m[1]
+  const isStr = /^N?'/i.test(lit)
+  return {
+    text: isStr ? lit.replace(/^N/i, '').slice(1, -1).replace(/''/g, "'") : lit,
+    numeric: !isStr,
+    unicode: /^N'/i.test(lit),
+    type: m[2],
+  }
+}
+
 export function displayText(v: SqlValue): string {
-  return v.kind === 'null' ? 'NULL' : v.value
+  if (v.kind === 'null') return 'NULL'
+  return castParts(v)?.text ?? v.value
 }
 
 export function editorTextFor(v: SqlValue): string {
@@ -40,7 +61,7 @@ export function editorTextFor(v: SqlValue): string {
       return ambiguous ? `${prefix}'${v.value.replace(/'/g, "''")}'` : v.value
     }
     default:
-      return v.value
+      return castParts(v)?.text ?? v.value
   }
 }
 
@@ -68,6 +89,17 @@ export function parseEditorText(input: string, prev: SqlValue): EditResult {
       /* fall through to the error below */
     }
     return { ok: false, error: "Text starting with ' must be a complete SQL string, e.g. 'it''s'. Escape quotes as ''." }
+  }
+
+  // Editing the inside of a CAST(literal AS type): keep the wrapper, replace the literal.
+  const cast = castParts(prev)
+  if (cast && !KEYWORD_EXPR.test(t) && !(CALL_RE.test(t) && checkExpression(t) === null)) {
+    const m = CAST_RE.exec(prev.value.trim())!
+    if (cast.numeric) {
+      if (!NUMBER_RE.test(t)) return { ok: false, error: `This value is CAST(… AS ${cast.type}), so it needs a number such as 1009640.00. Use =expression to replace the whole value.` }
+      return ok({ kind: 'expression', value: `CAST(${t} AS ${m[2]})` })
+    }
+    return ok({ kind: 'expression', value: `CAST(${cast.unicode ? 'N' : ''}'${input.replace(/'/g, "''")}' AS ${m[2]})` })
   }
 
   if (prevIsText) return ok({ kind: textKind, value: input })
