@@ -32,10 +32,11 @@ describe('parser', () => {
     expect(s.rows).toHaveLength(3)
     expect(s.rows[2].cells[2].kind).toBe('null')
   })
-  it('keeps multiple statements separate', () => {
-    const r = parseOk("INSERT INTO dbo.Users (Id, Name) VALUES (1, 'Alice');\n\nINSERT INTO dbo.Users (Id, Name) VALUES (2, 'Bob');")
-    expect(r.statements).toHaveLength(2)
-    expect(r.statements.map((s) => s.rows.length)).toEqual([1, 1])
+  it('keeps statements separate when grouping is off, and groups them by default', () => {
+    const sql = "INSERT INTO dbo.Users (Id, Name) VALUES (1, 'Alice');\n\nINSERT INTO dbo.Users (Id, Name) VALUES (2, 'Bob');\nINSERT INTO dbo.Other (Id) VALUES (1);"
+    const sep = parseInserts(sql, { mergeConsecutive: false })
+    expect(sep.statements.map((s) => s.rows.length)).toEqual([1, 1, 1])
+    expect(parseOk(sql).statements.map((s) => [s.tableRaw, s.rows.length])).toEqual([['dbo.Users', 2], ['dbo.Other', 1]])
   })
   it('handles commas, parens and semicolons inside strings', () => {
     const v = cell("INSERT INTO t (a) VALUES ('Keyboard, (Mechanical); x');")
@@ -199,5 +200,43 @@ describe('clipboard TSV', () => {
   it('round-trips tabs, newlines and quotes', () => {
     const rows = [['he said "hi"', 'line1\nline2', 'a\tb'], ['', 'NULL', "it's"]]
     expect(parseTsv(toTsv(rows))).toEqual(rows)
+  })
+})
+
+describe('SSMS Generate Scripts format', () => {
+  const row = (t: string, id: string, ts: string) =>
+    `INSERT [dbo].[${t}] ([Id], [Name], [Amount], [Created]) VALUES (N'${id}', N'XX', CAST(1009640.00 AS Numeric(28, 2)), CAST(N'${ts}' AS DateTime))`
+  const SSMS = [row('A', '1', '2025-12-31T00:00:00.000'), row('A', '2', '2025-12-31T00:00:00.000'), '', row('B', '9', '2026-01-01T00:00:00.000'), row('A', '3', '2025-12-31T00:00:00.000')].join('\n')
+
+  it('parses statements without semicolons or INTO and detects the style', () => {
+    const r = parseInserts(SSMS)
+    expect(r.errors).toEqual([])
+    expect(r.sourceStyle).toBe('ssms')
+  })
+  it('groups same-table INSERTs into one tab (even when not adjacent)', () => {
+    const r = parseOk(SSMS)
+    expect(r.statements.map((s) => [s.tableRaw, s.rows.length])).toEqual([['[dbo].[A]', 3], ['[dbo].[B]', 1]])
+    expect(parseInserts(SSMS, { mergeConsecutive: false }).statements).toHaveLength(4)
+  })
+  it('regenerates the SSMS style exactly (one line per row, no semicolon)', () => {
+    const oneTable = [row('A', '1', '2025-12-31T00:00:00.000'), row('A', '2', '2025-12-31T00:00:00.000')].join('\n')
+    expect(serializeAll(parseOk(oneTable).statements, { style: 'ssms' })).toBe(oneTable)
+    expect(serializeAll(parseOk(oneTable).statements, { style: 'ssms', goSeparator: true })).toContain('\nGO\n')
+  })
+  it('accepts GO separators', () => {
+    const r = parseOk(row('A', '1', '2025-12-31T00:00:00.000') + '\nGO\n' + row('A', '2', '2025-12-31T00:00:00.000') + '\nGO')
+    expect(r.sawGo).toBe(true)
+    expect(r.statements[0].rows).toHaveLength(2)
+  })
+  it('edits the inside of CAST(literal AS type) and keeps the wrapper', () => {
+    const [date, , amount] = [3, 0, 2].map((i) => i) && [parseOk(row('A', '1', '2025-12-31T00:00:00.000')).statements[0].rows[0].cells[3], null, parseOk(row('A', '1', '2025-12-31T00:00:00.000')).statements[0].rows[0].cells[2]]
+    expect(editorTextFor(date!)).toBe('2025-12-31T00:00:00.000')
+    const d = parseEditorText('2026-02-01T00:00:00.000', date!)
+    expect(d.ok && serializeValue(d.value)).toBe("CAST(N'2026-02-01T00:00:00.000' AS DateTime)")
+    const a = parseEditorText('250.5', amount!)
+    expect(a.ok && serializeValue(a.value)).toBe('CAST(250.5 AS Numeric(28, 2))')
+    expect(parseEditorText('abc', amount!).ok).toBe(false)
+    const e = parseEditorText('=GETDATE()', date!)
+    expect(e.ok && e.value.value).toBe('GETDATE()')
   })
 })
