@@ -27,7 +27,7 @@ Everything runs in your browser. SQL is never executed, uploaded or sent to any 
 
 **Editing**
 - Grid with the real SQL column names as headers and a separate row-number column
-- In-cell editing, keyboard navigation, range selection, copy and paste (Tabulator)
+- Excel-style editing: arrow-key navigation, type to replace, Tab/Enter to commit and move on, range selection, copy, cut and paste (Tabulator for rendering, custom selection and keyboard layer)
 - Undo, redo and reset to the originally parsed data (reset is itself undoable)
 - Add, insert above/below, duplicate and delete rows
 - Bulk find and replace in text cells, optionally limited to one column
@@ -72,17 +72,37 @@ The `dist/` folder is plain static files and can be hosted anywhere (no backend 
 
 1. **Paste** INSERT statements into *Original SQL*, or press **Load sample**. You can also **Import .sql**.
 2. Press **Parse SQL** (or Ctrl+Enter). Parse errors are listed under the editor with line and column. Click one to jump to it.
-3. **Edit** in the grid. Double-click a cell, or select it and start the editor with Enter. Press Enter to commit and Esc to cancel.
+3. **Edit** in the grid like a spreadsheet: move with the arrow keys, just start typing to replace a cell, then press Tab (next cell) or Enter (cell below). See [Keyboard shortcuts](#keyboard-shortcuts).
 4. Check the **Generated SQL** panel. Use **Copy SQL** or **Download .sql**.
 
 Handy details:
 
 - Edited cells have an amber corner. Hover one to see its original value. New rows are marked the same way.
-- Select a whole column by clicking its header, then use **Copy selection** to copy that column.
+- Select a whole column with Ctrl+Space, a whole row with Shift+Space or by clicking its row number, and everything with Ctrl+A. Then copy with Ctrl+C or **Copy selection**.
 - **Rows per INSERT** splits the output into several INSERT statements (SQL Server allows 1000 row constructors per `VALUES` list). `0` keeps one INSERT per source statement.
 - **Selected rows only** limits the output to the rows currently selected in the grid.
 - Panels can be hidden, and resized by dragging their divider bars. **Expand** enlarges the output editor.
 - Undo and redo: Ctrl+Z and Ctrl+Y (also Ctrl+Shift+Z) when focus is not inside a text field or editor.
+
+## Keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| Arrow keys | Move the active cell |
+| Type any character | Start editing and replace the cell content |
+| F2 or double-click | Edit in place, keeping the current text |
+| Tab / Shift+Tab | Commit and move right / left (wraps to the next / previous row) |
+| Enter / Shift+Enter | Commit and move down / up |
+| Arrow keys while typing a new value | Commit and move (like Excel) |
+| Esc | Cancel the edit, or collapse the selection |
+| Shift+arrows, click-drag, Shift+click | Select a range |
+| Ctrl+arrows | Jump to the first/last row or column |
+| Home / End, Ctrl+Home / Ctrl+End | Row start / end, grid corners |
+| PageUp / PageDown | Move 15 rows |
+| Ctrl+A, Ctrl+Space, Shift+Space | Select all, column, row |
+| Ctrl+C, Ctrl+X, Ctrl+V | Copy, cut, paste (tab-separated, works with Excel and Google Sheets). One value pasted onto a selection fills it |
+| Delete / Backspace | Set the selected cells to `NULL` |
+| Ctrl+Z / Ctrl+Y | Undo / redo |
 
 ## Cell editing rules
 
@@ -104,7 +124,7 @@ What you type is interpreted by a small, predictable set of rules (`src/core/val
 When you open a string cell for editing, quotes are shown automatically if the plain text would be ambiguous
 (empty, `NULL`, or starting with `'`, `N'` or `=`), so what you see always parses back to the same value.
 Invalid input (unbalanced parentheses in an expression, an unterminated `'string`) is rejected with a message and the cell is left unchanged.
-The same rules apply to pasted text, and pressing Delete on a selection sets cells to `NULL`.
+The same rules apply to pasted text. Pasting never adds rows or columns: anything beyond the grid edge is ignored.
 
 ## Supported SQL
 
@@ -193,7 +213,7 @@ Parser and serializer tests run in plain Node without Vue or a browser.
 ## Known limitations
 
 - Only SQL Server (T-SQL) is supported. The dialect dropdown shows that single option.
-- The grid and UI have been type-checked and built, but they are not covered by automated browser tests. Please check keyboard navigation, range selection and multi-cell paste in your browser, and report anything odd.
+- The grid and UI have been type-checked and built, but they are not covered by automated browser tests. Please check keyboard navigation, selection and multi-cell paste in your browser, and report anything odd.
 - Sorting and filtering change only the view. The generated SQL keeps the original row order.
 - Columns cannot be reordered, so output always matches the input column order.
 - Comments in the input are not preserved in the generated SQL.
