@@ -7,7 +7,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { TabulatorFull as Tabulator, type CellComponent, type ColumnDefinition } from 'tabulator-tables'
 import type { InsertStatement, SqlValue } from '../core/types'
-import { NULL_VALUE, displayText, editorTextFor, parseEditorText } from '../core/valueEdit'
+import { NULL_VALUE, castParts, displayText, editorTextFor, parseEditorText } from '../core/valueEdit'
 import { valuesEqual } from '../core/serializer'
 import { parseTsv, toTsv } from '../core/tsv'
 import type { CellEdit } from '../composables/useSqlEditorState'
@@ -160,7 +160,14 @@ function formatter(cell: CellComponent) {
       break
     case 'number': span.className = 'v-num'; span.textContent = v.value; break
     case 'binary': span.className = 'v-bin'; span.textContent = v.value; break
-    default: span.className = 'v-expr'; span.textContent = v.value
+    default: {
+      const cp = castParts(v)
+      if (cp) { // CAST(literal AS type): show the literal, keep the type in the tooltip
+        span.className = cp.numeric ? 'v-num' : 'v-cast'
+        span.textContent = cp.text
+        e.title = (e.title ? e.title + '\n' : '') + `CAST AS ${cp.type}`
+      } else { span.className = 'v-expr'; span.textContent = v.value }
+    }
   }
   return span
 }

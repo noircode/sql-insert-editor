@@ -49,13 +49,29 @@ export interface ParseIssue {
   hint?: string
 }
 
+export interface ParseOptions {
+  /** Merge consecutive INSERTs that target the same table with the same columns into one grid. Default true. */
+  mergeConsecutive?: boolean
+}
+
 export interface ParseResult {
+  /** 'ssms' when the input looks like SSMS "Generate Scripts" output: one row per INSERT, no INTO, no semicolons. */
+  sourceStyle: 'standard' | 'ssms'
+  /** True when `GO` batch separators were found in the input. */
+  sawGo: boolean
   statements: InsertStatement[]
   errors: ParseIssue[]
   warnings: ParseIssue[]
 }
 
 export interface SerializeOptions {
+  /**
+   * 'standard': multi-line `INSERT INTO t (cols) VALUES (...), (...);`
+   * 'ssms': SSMS Generate Scripts style, one single-line `INSERT [dbo].[t] ([cols]) VALUES (...)` per row, no semicolon.
+   */
+  style?: 'standard' | 'ssms'
+  /** ssms style only: put a `GO` line after every INSERT. */
+  goSeparator?: boolean
   /** Split each statement into INSERTs of at most this many rows. `null`/0 = keep one INSERT. */
   rowsPerInsert?: number | null
   /** Only emit rows whose id is in this set (statements with no matching rows are skipped). */

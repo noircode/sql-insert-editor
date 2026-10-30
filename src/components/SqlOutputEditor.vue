@@ -4,9 +4,9 @@ import CodeEditor from './CodeEditor.vue'
 
 const props = defineProps<{
   sql: string; dark: boolean; error: string; selectedCount: number
-  rowsPerInsert: number; selectedOnly: boolean; expanded: boolean
+  rowsPerInsert: number; selectedOnly: boolean; expanded: boolean; style: 'standard' | 'ssms'; go: boolean
 }>()
-const emit = defineEmits<{ 'update:rowsPerInsert': [number]; 'update:selectedOnly': [boolean]; toggleExpand: [] }>()
+const emit = defineEmits<{ 'update:style': ['standard' | 'ssms']; 'update:go': [boolean]; 'update:rowsPerInsert': [number]; 'update:selectedOnly': [boolean]; toggleExpand: [] }>()
 const copied = ref(false)
 
 async function copy() {
@@ -37,7 +37,17 @@ function download() {
       <span class="panel-title">Generated SQL</span>
       <span class="text-mute">Read-only. Updates as you edit.</span>
       <span class="flex-1" />
-      <label class="flex items-center gap-1 text-mute" title="Split each INSERT into chunks (SQL Server allows 1000 rows per VALUES list). 0 keeps one INSERT.">
+      <label class="flex items-center gap-1 text-mute">
+        Format
+        <select class="field" :value="style" aria-label="Output format" @change="emit('update:style', ($event.target as HTMLSelectElement).value as 'standard' | 'ssms')">
+          <option value="standard">Standard (multi-row)</option>
+          <option value="ssms">SSMS Generate Scripts (1 row per INSERT)</option>
+        </select>
+      </label>
+      <label v-if="style === 'ssms'" class="flex items-center gap-1 text-mute">
+        <input type="checkbox" :checked="go" @change="emit('update:go', ($event.target as HTMLInputElement).checked)" /> GO after each
+      </label>
+      <label v-else class="flex items-center gap-1 text-mute" title="Split each INSERT into chunks (SQL Server allows 1000 rows per VALUES list). 0 keeps one INSERT.">
         Rows per INSERT
         <input type="number" min="0" class="field w-16" :value="rowsPerInsert" @change="emit('update:rowsPerInsert', Math.max(0, Number(($event.target as HTMLInputElement).value) || 0))" />
       </label>

@@ -28,6 +28,11 @@ export function useSqlEditorState() {
   const errors = ref<ParseIssue[]>([])
   const warnings = ref<ParseIssue[]>([])
   const activeStmt = ref(0)
+  /** Merge consecutive INSERTs with the same table + columns when parsing. */
+  const mergeSame = ref(true)
+  /** Detected style of the last successful parse; the UI uses it as the default output style. */
+  const sourceStyle = ref<'standard' | 'ssms'>('standard')
+  const sawGo = ref(false)
   const past = shallowRef<readonly (readonly InsertStatement[])[]>([])
   const future = shallowRef<readonly (readonly InsertStatement[])[]>([])
   /** Bumped on any change (drives SQL regeneration). */
@@ -51,10 +56,12 @@ export function useSqlEditorState() {
 
   /** Parse the input editor. On errors the previous grid is kept and the errors are shown. */
   function parse(): boolean {
-    const r = parseInserts(inputSql.value)
+    const r = parseInserts(inputSql.value, { mergeConsecutive: mergeSame.value })
     errors.value = r.errors
     warnings.value = r.warnings
     if (r.errors.length > 0) return false
+    sourceStyle.value = r.sourceStyle
+    sawGo.value = r.sawGo
     items.value = r.statements
     initial.value = r.statements
     past.value = []
@@ -214,7 +221,7 @@ export function useSqlEditorState() {
   const generate = (opts: SerializeOptions = {}) => serializeAll(items.value, opts)
 
   return {
-    inputSql, items, errors, warnings, activeStmt, revision, gridRevision, lastEditError,
+    inputSql, items, errors, warnings, activeStmt, mergeSame, sourceStyle, sawGo, revision, gridRevision, lastEditError,
     canUndo, canRedo, dirty, hasData,
     parse, clearAll, setCells, insertRow, duplicateRows, deleteRows, findReplace,
     undo, redo, reset, isModified, originalText, generate,

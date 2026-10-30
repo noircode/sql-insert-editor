@@ -22,7 +22,10 @@ watch(dark, (d) => {
 const confirmDiscard = (what: string) => !st.dirty.value || window.confirm(`You have unsaved edits. ${what} and lose them?`)
 function parse() {
   if (!confirmDiscard('Parsing again will replace the grid')) return
-  st.parse()
+  if (st.parse()) { // output defaults to the style of the pasted SQL
+    outputStyle.value = st.sourceStyle.value
+    goSeparator.value = st.sawGo.value
+  }
 }
 function clearInput() {
   if (st.inputSql.value && (st.hasData.value ? confirmDiscard('Clear the input and grid') : true)) st.clearAll()
@@ -40,6 +43,8 @@ const outputSql = ref('')
 const genError = ref('')
 const modifiedCount = ref(0)
 const rowsPerInsert = ref(0)
+const outputStyle = ref<'standard' | 'ssms'>('standard')
+const goSeparator = ref(false)
 const selectedOnly = ref(false)
 const selectedIds = ref<number[]>([])
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -47,6 +52,8 @@ function regenerate() {
   try {
     outputSql.value = st.generate({
       rowsPerInsert: rowsPerInsert.value || null,
+      style: outputStyle.value,
+      goSeparator: goSeparator.value,
       onlyRowIds: selectedOnly.value ? new Set(selectedIds.value) : null,
     })
     genError.value = ''
@@ -58,7 +65,7 @@ function regenerate() {
   for (const r of s?.rows ?? []) r.cells.forEach((c, i) => { if (!r.origin || !valuesEqual(r.origin[i], c)) n++ })
   modifiedCount.value = n
 }
-watch([st.revision, rowsPerInsert, selectedOnly, selectedIds, st.activeStmt], () => {
+watch([st.revision, rowsPerInsert, selectedOnly, selectedIds, st.activeStmt, outputStyle, goSeparator], () => {
   clearTimeout(timer)
   timer = setTimeout(regenerate, st.items.value.reduce((n, s) => n + s.rows.length, 0) > 2000 ? 250 : 60)
 })
@@ -128,7 +135,7 @@ const outStyle = computed(() => ({ height: outputExpanded.value ? '60vh' : outpu
       <!-- Input -->
       <div v-if="inputOpen" class="shrink-0 border-b border-line" :style="{ height: inputH + 'px' }">
         <SqlInputEditor
-          v-model="st.inputSql.value" :errors="st.errors.value" :warnings="st.warnings.value" :dark="dark"
+          v-model="st.inputSql.value" v-model:merge="st.mergeSame.value" :errors="st.errors.value" :warnings="st.warnings.value" :dark="dark"
           @parse="parse" @clear="clearInput" @sample="st.inputSql.value = SAMPLE_SQL"
         />
       </div>
@@ -172,7 +179,7 @@ const outStyle = computed(() => ({ height: outputExpanded.value ? '60vh' : outpu
       </div>
       <div v-if="outputOpen" class="shrink-0" :style="outStyle">
         <SqlOutputEditor
-          v-model:rows-per-insert="rowsPerInsert" v-model:selected-only="selectedOnly"
+          v-model:rows-per-insert="rowsPerInsert" v-model:selected-only="selectedOnly" v-model:style="outputStyle" v-model:go="goSeparator"
           :sql="outputSql" :dark="dark" :error="genError" :selected-count="selectedIds.length" :expanded="outputExpanded"
           @toggle-expand="outputExpanded = !outputExpanded"
         />

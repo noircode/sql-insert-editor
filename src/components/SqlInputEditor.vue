@@ -4,8 +4,8 @@ import CodeEditor from './CodeEditor.vue'
 import ParseErrorPanel from './ParseErrorPanel.vue'
 import type { ParseIssue } from '../core/types'
 
-const props = defineProps<{ modelValue: string; errors: ParseIssue[]; warnings: ParseIssue[]; dark: boolean }>()
-const emit = defineEmits<{ 'update:modelValue': [string]; parse: []; clear: []; sample: [] }>()
+const props = defineProps<{ merge: boolean; modelValue: string; errors: ParseIssue[]; warnings: ParseIssue[]; dark: boolean }>()
+const emit = defineEmits<{ 'update:merge': [boolean]; 'update:modelValue': [string]; parse: []; clear: []; sample: [] }>()
 
 const editor = ref<InstanceType<typeof CodeEditor>>()
 const fileInput = ref<HTMLInputElement>()
@@ -25,6 +25,9 @@ async function importFile(e: Event) {
       <span class="text-mute">Paste INSERT statements, then parse them into the grid.</span>
       <span class="flex-1" />
       <input ref="fileInput" type="file" accept=".sql,.txt,text/plain" class="hidden" @change="importFile" />
+      <label class="flex items-center gap-1 text-mute" title="SSMS Generate Scripts writes one INSERT per row. Put all INSERTs with the same table and columns into one grid tab.">
+        <input type="checkbox" :checked="merge" @change="emit('update:merge', ($event.target as HTMLInputElement).checked)" /> Group same-table INSERTs
+      </label>
       <button class="btn" @click="fileInput?.click()">Import .sql</button>
       <button class="btn" @click="$emit('sample')">Load sample</button>
       <button class="btn" :disabled="!modelValue" @click="$emit('clear')">Clear</button>

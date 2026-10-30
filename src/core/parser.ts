@@ -1,4 +1,4 @@
-import type { EditableRow, InsertStatement, ParseIssue, ParseResult, SqlValue } from './types'
+import type { EditableRow, InsertStatement, ParseIssue, ParseOptions, ParseResult, SqlValue } from './types'
 import { SqlSyntaxError, tokenize, unescapeString, unquoteIdentifier, type Token } from './tokenizer'
 
 let nextId = 1
@@ -13,8 +13,9 @@ const kw = (t: Token | undefined, word: string) => !!t && t.type === 'word' && t
  * Everything else (INSERT..SELECT, EXEC, DEFAULT VALUES, TOP, OUTPUT, table hints,
  * non-INSERT statements) is reported as an error – never guessed at or dropped.
  */
-export function parseInserts(sql: string): ParseResult {
-  const result: ParseResult = { statements: [], errors: [], warnings: [] }
+export function parseInserts(sql: string, opts: ParseOptions = {}): ParseResult {
+  const mergeConsecutive = opts.mergeConsecutive ?? true
+  const result: ParseResult = { sourceStyle: 'standard', sawGo: false, statements: [], errors: [], warnings: [] }
   let tokens: Token[]
   try {
     const lexed = tokenize(sql)
@@ -35,33 +36,70 @@ export function parseInserts(sql: string): ParseResult {
     throw e
   }
 
+  const parsed: InsertStatement[] = []
+  let ssmsLike = true // every statement: one row, no INTO, no semicolon
   let p = 0
   while (p < tokens.length) {
     if (tokens[p].text === ';') {
       p++
       continue
     }
-    const startTok = tokens[p]
+    if (kw(tokens[p], 'GO')) { // SSMS batch separator
+      result.sawGo = true
+      p++
+      continue
+    }
     try {
-      const { statement, next } = parseOne(sql, tokens, p)
-      result.statements.push(statement)
-      if (statement.rows.length > 1000) {
-        result.warnings.push({
-          message: `This INSERT has ${statement.rows.length} rows. SQL Server allows at most 1000 row constructors per VALUES clause; use "Rows per INSERT" in the output panel.`,
-          line: startTok.line,
-          column: startTok.column,
-          offset: startTok.offset,
-        })
-      }
+      const { statement, next, semi, into } = parseOne(sql, tokens, p)
+      parsed.push(statement)
+      if (semi || into || statement.rows.length !== 1) ssmsLike = false
       p = next
     } catch (e) {
       if (!(e instanceof SqlSyntaxError)) throw e
       result.errors.push(toIssue(e))
-      // Recover at the next top-level semicolon so later statements are still checked.
-      while (p < tokens.length && tokens[p].text !== ';') p++
-      if (p === tokens.length || result.errors.length >= 20) break
+      // Recover at the next top-level semicolon / INSERT / GO so later statements are still checked.
+      p++
+      while (p < tokens.length && tokens[p].text !== ';' && !kw(tokens[p], 'INSERT') && !kw(tokens[p], 'GO')) p++
+      if (p >= tokens.length || result.errors.length >= 20) break
     }
   }
+
+  // Group INSERTs that target the same table with the same columns into one grid (SSMS writes one INSERT per row).
+  // Groups keep the order in which each table first appears; rows keep their order inside the group.
+  const keyOf = (x: InsertStatement) => x.tableRaw.toLowerCase() + '|' + (x.columnsRaw ? x.columnsRaw.join(',').toLowerCase() : '#' + x.columns.length)
+  const groupAt = new Map<string, number>()
+  let merged = 0
+  let reordered = false
+  for (const s of parsed) {
+    const k = keyOf(s)
+    const at = groupAt.get(k)
+    if (mergeConsecutive && at !== undefined) {
+      const g = result.statements[at]
+      result.statements[at] = { ...g, rows: [...g.rows, ...s.rows] }
+      merged++
+      if (at !== result.statements.length - 1) reordered = true
+    } else {
+      groupAt.set(k, result.statements.length)
+      result.statements.push(s)
+    }
+  }
+  if (merged > 0) {
+    result.warnings.push({
+      message: `${parsed.length} INSERT statements were grouped into ${result.statements.length} grid tab(s) by table and columns.` +
+        (reordered ? ' Some INSERTs were not next to each other, so the generated SQL lists each table together (rows keep their order).' : '') +
+        ' Untick "Group same-table INSERTs" to keep every statement separate.',
+      line: 1, column: 1, offset: 0,
+    })
+  }
+  for (const st of result.statements) {
+    if (st.rows.length > 1000) {
+      result.warnings.push({
+        message: `${st.tableRaw} has ${st.rows.length} rows. SQL Server allows at most 1000 row constructors per VALUES clause; use "Rows per INSERT" or the SSMS output style.`,
+        line: st.line, column: 1, offset: 0,
+      })
+    }
+  }
+  if (parsed.length > 0 && ssmsLike) result.sourceStyle = 'ssms'
 
   if (result.statements.length === 0 && result.errors.length === 0) {
     result.errors.push({ message: 'No INSERT statement found.', line: 1, column: 1, offset: 0, hint: 'Paste one or more INSERT … VALUES statements.' })
@@ -77,7 +115,7 @@ const toIssue = (e: SqlSyntaxError): ParseIssue => ({
   hint: e.hint,
 })
 
-function parseOne(sql: string, t: Token[], start: number): { statement: InsertStatement; next: number } {
+function parseOne(sql: string, t: Token[], start: number): { statement: InsertStatement; next: number; semi: boolean; into: boolean } {
   let p = start
   const first = t[p]
   if (!kw(first, 'INSERT')) {
@@ -85,7 +123,8 @@ function parseOne(sql: string, t: Token[], start: number): { statement: InsertSt
   }
   p++
   if (kw(t[p], 'TOP')) throw new SqlSyntaxError('INSERT TOP (...) is not supported.', t[p])
-  if (kw(t[p], 'INTO')) p++
+  const into = kw(t[p], 'INTO')
+  if (into) p++
 
   // ---- table name: up to 4 dot-separated parts; empty parts allowed (db..table) ----
   const nameStart = t[p]
@@ -182,10 +221,12 @@ function parseOne(sql: string, t: Token[], start: number): { statement: InsertSt
     break
   }
 
-  if (t[p] && t[p].text !== ';') {
+  // The semicolon is optional (SSMS scripts have none); the next statement may follow directly.
+  if (t[p] && t[p].text !== ';' && !kw(t[p], 'INSERT') && !kw(t[p], 'GO')) {
     throw new SqlSyntaxError(`Unexpected "${t[p].text}" after the VALUES list.`, t[p], 'Terminate the statement with ";" or remove the extra syntax.')
   }
-  if (t[p]?.text === ';') p++
+  const semi = t[p]?.text === ';'
+  if (semi) p++
 
   return {
     statement: {
@@ -197,6 +238,8 @@ function parseOne(sql: string, t: Token[], start: number): { statement: InsertSt
       line: first.line,
     },
     next: p,
+    semi,
+    into,
   }
 }
 
