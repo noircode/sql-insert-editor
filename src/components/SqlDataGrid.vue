@@ -88,12 +88,29 @@ function emitSelection() {
   emit('selection', ids)
 }
 
-function reveal() {
-  if (!table || !active) return
-  try {
-    table.scrollToRow(active.id, 'nearest', false).catch(() => {})
-    table.scrollToColumn('c' + active.col, 'middle', false).catch(() => {})
-  } catch { /* row filtered out */ }
+/**
+ * Scroll the grid just enough to bring the active cell fully into view (like Excel).
+ * Moving by one cell therefore scrolls by at most one row/column, never a page.
+ */
+function reveal(retry = true) {
+  if (!table || !active || !el.value) return
+  const holder = el.value.querySelector<HTMLElement>('.tabulator-tableholder')
+  if (!holder) return
+  const cell = holder.querySelector<HTMLElement>(`.tabulator-cell[data-r="${active.id}"][data-c="${active.col}"]`)
+  if (!cell) {
+    // Row is not rendered (far away): jump to it once, then fine-tune.
+    if (retry) table.scrollToRow(active.id, 'center', true).then(() => requestAnimationFrame(() => reveal(false))).catch(() => {})
+    return
+  }
+  const h = holder.getBoundingClientRect()
+  const c = cell.getBoundingClientRect()
+  const frozen = holder.querySelector<HTMLElement>('.tabulator-row-header')?.offsetWidth ?? 0
+  const viewBottom = h.top + holder.clientHeight
+  const viewRight = h.left + holder.clientWidth
+  if (c.top < h.top) holder.scrollTop -= h.top - c.top
+  else if (c.bottom > viewBottom) holder.scrollTop += c.bottom - viewBottom
+  if (c.left < h.left + frozen) holder.scrollLeft -= h.left + frozen - c.left
+  else if (c.right > viewRight) holder.scrollLeft += c.right - viewRight
 }
 
 function select(r: number, c: number, extend = false) {
@@ -334,11 +351,20 @@ const onMouseUp = () => { if (dragging) { dragging = false; emitSelection() } }
 const isTextField = (t: EventTarget | null) => !!(t as HTMLElement)?.closest?.('input, textarea, select')
 
 function onKeyDown(e: KeyboardEvent) {
-  if (isTextField(e.target) || !active || e.isComposing) return
+  if (isTextField(e.target) || e.isComposing) return
+  if (!active) { // nothing selected yet: first navigation key selects the first cell instead of scrolling the page
+    ensureOrder()
+    if (order.length && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) {
+      e.preventDefault()
+      select(0, 0)
+    }
+    return
+  }
   const mod = e.ctrlKey || e.metaKey
   const k = e.key
   const n = order.length
-  const page = 15
+  const holder = el.value?.querySelector<HTMLElement>('.tabulator-tableholder')
+  const page = Math.max(1, Math.floor((holder?.clientHeight ?? 400) / 26) - 1)
   ensureOrder()
   const { r, c } = cur()
   let handled = true
@@ -434,7 +460,7 @@ function build() {
   active = anchor = null
   table = new Tabulator(el.value!, {
     data: rowData(), columns: columns(), height: '100%', layout: 'fitData', index: '__id',
-    movableColumns: false, keybindings: false, editTriggerEvent: 'dblclick',
+    movableColumns: false, keybindings: false, selectableRows: false, editTriggerEvent: 'dblclick',
     placeholder: 'This statement has no rows. Use “Add row” to insert one.',
     rowHeader: {
       field: '__n', headerSort: false, resizable: false, frozen: true, width: 52, hozAlign: 'right',
