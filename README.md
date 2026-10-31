@@ -5,6 +5,9 @@ Edit SQL Server `INSERT … VALUES` statements in a spreadsheet-style grid inste
 Paste your INSERT statements, parse them, change cells by row and column name, and copy or download the regenerated SQL.
 Everything runs in your browser. SQL is never executed, uploaded or sent to any service, and no database connection is needed.
 
+Try it now:
+https://sql-insert-editor.pages.dev/
+
 ```
  Paste INSERT SQL ──▶ Parse ──▶ Edit in grid ──▶ Generated SQL ──▶ Copy / Download
 ```
